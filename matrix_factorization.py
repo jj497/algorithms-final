@@ -83,7 +83,7 @@ def train(train_df, test_df, embedding_dim, batch_size, learning_rate, epochs):
 
     model = Model(num_movies, num_users, embedding_dim)
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
-    loss_fn = nn.MSELoss(reduction='sum')
+    loss_fn = nn.MSELoss()
     train_loader = DataLoader(train_dataset, batch_size=batch_size)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
