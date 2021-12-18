@@ -52,7 +52,7 @@ class MatrixFactorization(nn.Module):
         assert e_m.shape == (batch_size, self.embedding_dim), f"e_m: {e_m.shape} != ({batch_size}, {self.embedding_dim})"
         assert e_u.shape == (batch_size, self.embedding_dim), f"e_u: {e_u.shape} != ({batch_size}, {self.embedding_dim})"
 
-        embedded_movies = e_m.view(batch_size, 1, self.embedding_dim ) # batch x 1 x embedding_dim
+        embedded_movies = e_m.view(batch_size, 1, self.embedding_dim) # batch x 1 x embedding_dim
         embedded_users = e_u.view(batch_size, self.embedding_dim , 1) # batch x embedding_dim x 1
         # If batch1 = (b x n x m) Tensor, batch2 = (b x m x p) Tensor, out will be (b x n x p) Tensor.
         result = torch.bmm(embedded_movies, embedded_users) # b x 1 x 1
@@ -93,7 +93,7 @@ def evaluate(dataloader, model, loss_fn):
     return total_loss / num_examples
 
 
-def train(train_df, test_df, embedding_dim, batch_size, learning_rate, epochs, std_dev, weight_decay):
+def train(train_df, test_df, embedding_dim, batch_size, learning_rate, epochs, std_dev, weight_decay, print_freq):
     train_dataset = df_to_tensor_dataset(train_df)
     test_dataset = df_to_tensor_dataset(test_df)
 
@@ -118,7 +118,7 @@ def train(train_df, test_df, embedding_dim, batch_size, learning_rate, epochs, s
     for epoch_no in range(epochs):
         total_loss = 0
         total_examples = 0
-        for t_movies, t_users, y in train_loader:
+        for batch_no, (t_movies, t_users, y) in enumerate(train_loader):
             pred = model(t_movies, t_users)
             loss = loss_fn(pred, y.view(-1, 1))
 
@@ -129,6 +129,13 @@ def train(train_df, test_df, embedding_dim, batch_size, learning_rate, epochs, s
 
             total_loss += loss.sum().item() * t_movies.shape[0]
             total_examples += t_movies.shape[0]
+
+            if batch_no % print_freq == 0:
+                model.eval()
+                train_loss = total_loss / total_examples
+                test_loss = evaluate(test_loader, model, loss_fn)
+                print(f"[Epoch {epoch_no + 1} batch {batch_no + 1}] train_loss: {train_loss}, test_loss: {test_loss}")
+                model.train()
 
 
         model.eval()
@@ -149,8 +156,9 @@ def main():
     parser.add_argument("--batch_size", help="batch size", type=int, default=1024)
     parser.add_argument("--learning_rate", help="learning rate", type=float, default=0.01)
     parser.add_argument("--epochs", help="epochs", type=int, default=100)
-    parser.add_argument("--std_dev", help="standard deviation", type=int, default=.5)
-    parser.add_argument("--weight_decay", help="weight_decay", type=int, default=.01)
+    parser.add_argument("--std_dev", help="standard deviation", type=float, default=0.5)
+    parser.add_argument("--weight_decay", help="weight_decay", type=float, default=0.0)
+    parser.add_argument("--print_freq", help="print frequency", type=int, default=1024)
 
     args = parser.parse_args()
     filepath_train = args.train_path
@@ -161,20 +169,15 @@ def main():
     epochs = args.epochs
     std_dev = args.std_dev
     weight_decay = args.weight_decay
+    print_freq = args.print_freq
 
     # 2. Read data
     train_df = read_data(args.train_path)
-    print('full train len', len(train_df))
-    if args.train_path == args.test_path:
-        X_train, X_test = train_test_split(train_df, test_size=0.1)
-        train_df = X_train
-        test_df = X_test
-    else:
-        test_df = read_data(args.test_path)
+    test_df = read_data(args.test_path)
 
     print('split train len', len(train_df))
-    train(train_df, test_df, embedding_dim, batch_size, learning_rate, epochs, std_dev, weight_decay)
-
+    model = train(train_df, test_df, embedding_dim, batch_size, learning_rate, epochs, std_dev, weight_decay, print_freq)
+    torch.save(model.state_dict(), "20m_model.pt")
 
 
 
